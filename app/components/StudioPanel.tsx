@@ -51,8 +51,11 @@ export default function StudioPanel({
   }, [firstFrame]);
 
   const speaker = useMemo(
-    () => avatars.find((a) => a.id === speakerId) ?? avatars.find((a) => a.id === cast[0]),
-    [avatars, speakerId, cast],
+    () =>
+      avatars.find((a) => a.id === speakerId) ??
+      avatars.find((a) => a.id === cast[0]) ??
+      (mode === 'talk' ? (avatars.find((a) => a.voiceId) ?? avatars[0]) : undefined),
+    [avatars, speakerId, cast, mode],
   );
 
   const toggleCast = (id: string) => {
