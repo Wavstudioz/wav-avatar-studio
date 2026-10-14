@@ -124,6 +124,24 @@ export default function StudioPanel({
       ? !!speaker && !!audioUrl && !audioTooShort && !audioTooLong
       : !!scene.trim() || cast.length > 0 || !!frameUrl);
 
+  const blocker = busy
+    ? null
+    : mode === 'talk'
+      ? !speaker
+        ? 'Tap an avatar to pick who is talking.'
+        : !audioUrl
+          ? speaker.voiceId
+            ? 'Click “Voice it” (or upload a line) — talking shots need the audio first.'
+            : `${speaker.name} has no voice yet. Upload a recorded line, or give them a voice on the Avatars tab.`
+          : audioTooShort
+            ? 'The line is under 2 seconds. Add a few words.'
+            : audioTooLong
+              ? 'The line is over 30 seconds. Split it into two shots.'
+              : null
+      : canGenerate
+        ? null
+        : 'Describe the scene, pick a cast member, or add a first frame.';
+
   if (avatars.length === 0 && mode === 'talk') {
     return (
       <div className="empty">
@@ -331,6 +349,11 @@ export default function StudioPanel({
         <button className="btn primary big" disabled={!canGenerate} onClick={generate}>
           {busy === 'generate' ? 'Sending to Seedance…' : draft ? 'Generate draft' : 'Generate'}
         </button>
+        {blocker && (
+          <p className="warn" style={{ textAlign: 'center', marginTop: 10 }}>
+            {blocker}
+          </p>
+        )}
         <p className="hint" style={{ textAlign: 'center', marginTop: 10 }}>
           Renders take 1 to 15 minutes. You can leave this page; the Library picks them up.
         </p>
