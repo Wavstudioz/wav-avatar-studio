@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api, money } from '@/lib/client';
-import type { Job } from '@/lib/types';
+import { PORTRAIT_RATES, RATES, type Job } from '@/lib/types';
 
 const POLL_MS = 8000;
 
@@ -113,27 +113,35 @@ export default function LibraryPanel({
               <div className="title">{j.title}</div>
               <div className="tags">
                 <span className="chip">{j.kind}</span>
+                {j.params.engine === 'portrait' && <span className="chip">real person</span>}
                 {j.params.draft && <span className="chip">draft</span>}
                 {j.params.resolution && <span className="chip">{j.params.resolution}</span>}
                 {j.params.duration && <span className="chip">{j.params.duration}s</span>}
                 {j.estimatedCost !== undefined && <span className="chip">~{money(j.estimatedCost)}</span>}
               </div>
               {j.error && <p className="hint status-failed">{j.error}</p>}
+              {j.error && /moderation/i.test(j.error) && j.params.engine !== 'portrait' && j.kind === 'talk' && (
+                <p className="hint">
+                  Seedance blocks real faces. In the Studio, switch the engine to <b>Real person (photo)</b> and try again.
+                </p>
+              )}
 
               {j.status === 'completed' && (
                 <div className="actions">
-                  {j.draftTaskId && (
+                  {(j.draftTaskId || (j.params.engine === 'portrait' && j.params.resolution !== '1080p')) && (
                     <button
                       className="btn small primary"
                       disabled={!!busy}
                       onClick={() => queue({ kind: 'final', parentId: j.id }, `final-${j.id}`)}
                     >
-                      {busy === `final-${j.id}` ? 'Sending…' : `Render 1080p (~${money((j.params.duration ?? 5) * 1.137)})`}
+                      {busy === `final-${j.id}` ? 'Sending…' : `Render 1080p (~${money((j.params.duration ?? 5) * (j.params.engine === 'portrait' ? PORTRAIT_RATES['1080p'] : RATES['1080p']))})`}
                     </button>
                   )}
-                  <button className="btn small" onClick={() => setExtending(extending === j.id ? null : j.id)}>
-                    Extend
-                  </button>
+                  {j.params.engine !== 'portrait' && (
+                    <button className="btn small" onClick={() => setExtending(extending === j.id ? null : j.id)}>
+                      Extend
+                    </button>
+                  )}
                   {j.lastFrameUrl && (
                     <button className="btn small" onClick={() => useAsFirstFrame(j.lastFrameUrl!)}>
                       Next shot from last frame

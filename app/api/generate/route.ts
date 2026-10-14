@@ -1,7 +1,7 @@
 import { submitVideo, SEEDANCE_MODEL } from '@/lib/empirio';
 import { readJson, saveJson } from '@/lib/store';
 import { route, need } from '@/lib/http';
-import { RATES, type Avatar, type Job, type JobKind } from '@/lib/types';
+import { PORTRAIT_MODEL, PORTRAIT_RATES, RATES, type Avatar, type Engine, type Job, type JobKind } from '@/lib/types';
 
 export const maxDuration = 60;
 
@@ -20,6 +20,10 @@ interface GenerateBody {
   draft?: boolean;
   ambient?: boolean;
   firstFrameUrl?: string;
+  /** talk only: 'portrait' animates the avatar's real photo with Pixverse Avatar */
+  engine?: Engine;
+  /** seconds of dialogue audio, for the portrait cost estimate */
+  audioSeconds?: number;
   // extend + final
   parentId?: string;
 }
@@ -38,7 +42,29 @@ export const POST = route(async (req: Request) => {
     const parent = await readJson<Job>(`jobs/${need(body.parentId, 'Missing source clip')}.json`);
     if (!parent) throw new Error('Source clip not found');
 
-    if (body.kind === 'final') {
+    if (body.kind === 'final' && parent.params.engine === 'portrait') {
+      // Portrait clips have no draft id: re-render the same photo + audio at 1080p.
+      request = {
+        model: PORTRAIT_MODEL,
+        image: need(parent.params.image, 'Missing portrait for this clip'),
+        audio: need(parent.audioUrl, 'Missing audio for this clip'),
+        resolution: '1080p',
+        ...(parent.prompt ? { prompt: parent.prompt } : {}),
+      };
+      job = {
+        id: crypto.randomUUID(),
+        kind: 'final',
+        title: `${parent.title} · 1080p final`,
+        avatarIds: parent.avatarIds,
+        prompt: parent.prompt,
+        dialogue: parent.dialogue,
+        audioUrl: parent.audioUrl,
+        params: { engine: 'portrait', image: parent.params.image, resolution: '1080p', duration: parent.params.duration },
+        parentId: parent.id,
+        estimatedCost: (parent.params.duration ?? 5) * PORTRAIT_RATES['1080p'],
+        createdAt: now,
+      };
+    } else if (body.kind === 'final') {
       const draftTaskId = need(parent.draftTaskId, 'That clip is not a draft (no draft id came back)');
       request = { model: SEEDANCE_MODEL, draft_task_id: draftTaskId, return_last_frame: true };
       job = {
@@ -76,6 +102,33 @@ export const POST = route(async (req: Request) => {
         createdAt: now,
       };
     }
+  } else if (body.kind === 'talk' && body.engine === 'portrait') {
+    // Real-person talking portrait: Pixverse Avatar lip-syncs one photo to the line.
+    const avatars = (
+      await Promise.all((body.avatarIds ?? []).map((id) => readJson<Avatar>(`avatars/${id}.json`)))
+    ).filter((a): a is Avatar => !!a);
+    const speaker = need(avatars.find((a) => a.id === body.speakerId) ?? avatars[0], 'Pick who is talking');
+    const image = speaker.imageUrls[0];
+    const audioUrl = need(body.audioUrl, 'Voice the dialogue (or upload a line) first');
+    const resolution = body.draft ? '540p' : (body.resolution ?? '720p');
+    const duration = Math.max(1, Math.round(body.audioSeconds ?? body.duration ?? 6));
+    const prompt = [body.scene?.trim(), 'Natural head movement and facial expression, precise lip sync.']
+      .filter(Boolean)
+      .join(' ');
+
+    request = { model: PORTRAIT_MODEL, image, audio: audioUrl, resolution, prompt };
+    job = {
+      id: crypto.randomUUID(),
+      kind: 'talk',
+      title: `${speaker.name}: “${(body.dialogue ?? 'line').slice(0, 48)}${(body.dialogue?.length ?? 0) > 48 ? '…' : ''}”`,
+      avatarIds: [speaker.id],
+      prompt,
+      dialogue: body.dialogue,
+      audioUrl,
+      params: { engine: 'portrait', image, resolution, duration, draft: !!body.draft },
+      estimatedCost: duration * PORTRAIT_RATES[resolution],
+      createdAt: now,
+    };
   } else {
     const avatars = (
       await Promise.all((body.avatarIds ?? []).map((id) => readJson<Avatar>(`avatars/${id}.json`)))
@@ -142,7 +195,7 @@ export const POST = route(async (req: Request) => {
       prompt,
       dialogue: body.dialogue,
       audioUrl: body.audioUrl,
-      params: { resolution, aspect_ratio: request.aspect_ratio as string, duration, draft: !!body.draft },
+      params: { engine: 'seedance', resolution, aspect_ratio: request.aspect_ratio as string, duration, draft: !!body.draft },
       estimatedCost: duration * RATES[resolution],
       createdAt: now,
     };

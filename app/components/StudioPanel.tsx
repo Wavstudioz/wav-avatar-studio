@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { api, audioDuration, money, uploadFile } from '@/lib/client';
-import { CAMERA_MOVES, RATES, type Avatar, type Job } from '@/lib/types';
+import { CAMERA_MOVES, PORTRAIT_RATES, RATES, type Avatar, type Engine, type Job } from '@/lib/types';
 
 type Mode = 'talk' | 'shot';
 type Res = '480p' | '720p' | '1080p';
@@ -38,6 +38,21 @@ export default function StudioPanel({
   const [draft, setDraft] = useState(true);
   const [ambient, setAmbient] = useState(true);
   const [frameUrl, setFrameUrl] = useState<string | undefined>(firstFrame);
+  const [engine, setEngineState] = useState<Engine>(() => {
+    try {
+      return (localStorage.getItem('wav.engine') as Engine) || 'portrait';
+    } catch {
+      return 'portrait';
+    }
+  });
+  const setEngine = (e: Engine) => {
+    setEngineState(e);
+    try {
+      localStorage.setItem('wav.engine', e);
+    } catch {
+      // storage unavailable; keep in memory
+    }
+  };
 
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,12 +127,16 @@ export default function StudioPanel({
         draft,
         ambient,
         firstFrameUrl: mode === 'shot' ? frameUrl : undefined,
+        engine: mode === 'talk' ? engine : 'seedance',
+        audioSeconds: audioLen ?? undefined,
       });
       onQueued(job);
     });
 
-  const effectiveRes: Res = draft ? '480p' : resolution;
-  const cost = duration * RATES[effectiveRes];
+  const portrait = mode === 'talk' && engine === 'portrait';
+  const effectiveRes: string = portrait ? (draft ? '540p' : resolution === '480p' ? '540p' : resolution) : draft ? '480p' : resolution;
+  const billedSeconds = portrait ? Math.max(1, Math.round(audioLen ?? duration)) : duration;
+  const cost = billedSeconds * (portrait ? PORTRAIT_RATES[effectiveRes] : RATES[effectiveRes]);
   const audioTooShort = audioLen !== null && audioLen < 2;
   const audioTooLong = audioLen !== null && audioLen > 30;
 
@@ -272,7 +291,7 @@ export default function StudioPanel({
           </>
         )}
 
-        <h3>Scene</h3>
+        <h3>{portrait ? 'Delivery direction (optional)' : 'Scene'}</h3>
         <textarea
           value={scene}
           onChange={(e) => setScene(e.target.value)}
@@ -289,36 +308,66 @@ export default function StudioPanel({
       <section className="card">
         <h2>Shot settings</h2>
 
-        <label className="f">
-          <span>Camera move</span>
-          <select value={camera} onChange={(e) => setCamera(e.target.value)}>
-            {CAMERA_MOVES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="f">
-          <span>Aspect ratio {mode === 'shot' && frameUrl ? '(follows the first frame)' : ''}</span>
-          <div className="seg">
-            {ASPECTS.map((a) => (
-              <button key={a} className={aspect === a ? 'on' : ''} onClick={() => setAspect(a)} disabled={mode === 'shot' && !!frameUrl}>
-                {a}
+        {mode === 'talk' && (
+          <label className="f">
+            <span>Engine</span>
+            <div className="seg">
+              <button className={engine === 'portrait' ? 'on' : ''} onClick={() => setEngine('portrait')}>
+                Real person (photo)
               </button>
-            ))}
-          </div>
-        </label>
+              <button className={engine === 'seedance' ? 'on' : ''} onClick={() => setEngine('seedance')}>
+                AI character (Seedance 2.5)
+              </button>
+            </div>
+            <p className="hint">
+              {portrait
+                ? 'Animates the avatar’s photo talking, lip-synced to the line. Works with real faces. Framing follows the photo.'
+                : 'Full scenes, camera moves and staging. Generated characters only — Seedance blocks real faces.'}
+            </p>
+          </label>
+        )}
 
-        <label className="f">
-          <span>Length · {duration}s</span>
-          <input type="range" min={4} max={30} value={duration} onChange={(e) => setDuration(+e.target.value)} />
-        </label>
+        {!portrait && (
+          <>
+            <label className="f">
+              <span>Camera move</span>
+              <select value={camera} onChange={(e) => setCamera(e.target.value)}>
+                {CAMERA_MOVES.map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="f">
+              <span>Aspect ratio {mode === 'shot' && frameUrl ? '(follows the first frame)' : ''}</span>
+              <div className="seg">
+                {ASPECTS.map((a) => (
+                  <button
+                    key={a}
+                    className={aspect === a ? 'on' : ''}
+                    onClick={() => setAspect(a)}
+                    disabled={mode === 'shot' && !!frameUrl}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            </label>
+
+            <label className="f">
+              <span>Length · {duration}s</span>
+              <input type="range" min={4} max={30} value={duration} onChange={(e) => setDuration(+e.target.value)} />
+            </label>
+          </>
+        )}
 
         <label className="check">
           <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} />
           <span>
-            <b style={{ color: 'var(--text)' }}>Draft first (recommended)</b> — 480p preview at the cheap rate. If you like it,
-            render the exact same shot at 1080p from the Library.
+            <b style={{ color: 'var(--text)' }}>Draft first (recommended)</b> —{' '}
+            {portrait
+              ? '540p preview. If you like it, re-render it at 1080p from the Library.'
+              : '480p preview at the cheap rate. If you like it, render the exact same shot at 1080p from the Library.'}
           </span>
         </label>
 
@@ -326,7 +375,7 @@ export default function StudioPanel({
           <label className="f">
             <span>Resolution</span>
             <div className="seg">
-              {(['480p', '720p', '1080p'] as Res[]).map((r) => (
+              {((portrait ? ['720p', '1080p'] : ['480p', '720p', '1080p']) as Res[]).map((r) => (
                 <button key={r} className={resolution === r ? 'on' : ''} onClick={() => setResolution(r)}>
                   {r}
                 </button>
@@ -344,13 +393,13 @@ export default function StudioPanel({
 
         <div className="cost">
           <span>
-            Estimated · {duration}s at {effectiveRes}
+            Estimated · {billedSeconds}s at {effectiveRes}
           </span>
           <b>{money(cost)}</b>
         </div>
 
         <button className="btn primary big" disabled={!canGenerate} onClick={generate}>
-          {busy === 'generate' ? 'Sending to Seedance…' : draft ? 'Generate draft' : 'Generate'}
+          {busy === 'generate' ? 'Sending…' : draft ? 'Generate draft' : 'Generate'}
         </button>
         {blocker && (
           <p className="warn" style={{ textAlign: 'center', marginTop: 10 }}>

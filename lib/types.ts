@@ -27,6 +27,9 @@ export interface Job {
   dialogue?: string;
   audioUrl?: string;
   params: {
+    /** 'seedance' (AI characters, full scenes) or 'portrait' (Pixverse Avatar — real photos, lip-sync) */
+    engine?: Engine;
+    image?: string;
     resolution?: string;
     aspect_ratio?: string;
     duration?: number;
@@ -45,6 +48,19 @@ export interface Job {
   completedAt?: string;
 }
 
+export type Engine = 'seedance' | 'portrait';
+
+export const PORTRAIT_MODEL = 'pixverse-avatar';
+
+/** Pixverse Avatar, per second of output (EmpirioLabs list price, Oct 2026) */
+export const PORTRAIT_RATES: Record<string, number> = {
+  '360p': 0.025556,
+  '540p': 0.051111,
+  '720p': 0.076667,
+  '1080p': 0.102222,
+};
+
+/** Seedance 2.5, per second of output */
 export const RATES: Record<string, number> = {
   '480p': 0.206,
   '720p': 0.462,
