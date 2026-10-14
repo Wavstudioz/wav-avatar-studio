@@ -13,9 +13,13 @@ export async function api<T>(path: string, body?: unknown, method?: string): Pro
 }
 
 export async function uploadFile(file: Blob, name: string): Promise<string> {
-  const { upload } = await import('@vercel/blob/client');
+  const { uploadPresigned } = await import('@vercel/blob/client');
   const safe = name.replace(/[^\w.-]+/g, '_');
-  const blob = await upload(`uploads/${safe}`, file, { access: 'public', handleUploadUrl: '/api/upload' });
+  const blob = await uploadPresigned(`uploads/${safe}`, file, {
+    access: 'public',
+    handleUploadUrl: '/api/upload',
+    contentType: file.type || undefined,
+  });
   return blob.url;
 }
 

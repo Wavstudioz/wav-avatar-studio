@@ -29,12 +29,12 @@ Private Higgsfield replacement for the .Wav crew. Build avatars with a generated
    - ElevenLabs: https://elevenlabs.io/app/settings/api-keys. **Starter plan or above** is needed for voice cloning.
 2. **Deploy to Vercel**
    - Push this folder to a GitHub repo, then import it at vercel.com/new.
-   - In the project, open **Storage**, create a **Blob** store, and connect it. This adds `BLOB_READ_WRITE_TOKEN` automatically.
+   - In the project, open **Storage**, create a **Blob** store with **Public** access, and connect it to the project. Vercel wires up the credentials automatically.
    - Under **Settings > Environment Variables**, add `EMPIRIOLABS_API_KEY`, `ELEVENLABS_API_KEY` and `APP_PASSWORD` (the crew password).
    - Redeploy.
 3. Open the site, enter the password (any username), and build your first avatar.
 
-**Run locally instead:** `cp .env.example .env.local`, fill in all four values (copy the Blob token from Vercel), then `npm install && npm run dev`. You still need the Blob store, because Seedance downloads your references from public URLs.
+**Run locally instead:** `cp .env.example .env.local`, fill in the keys, and add a `BLOB_READ_WRITE_TOKEN` from the store's settings (or run `vercel env pull`), then `npm install && npm run dev`. You still need the Blob store, because Seedance downloads your references from public URLs.
 
 ## Costs (EmpirioLabs list price, Oct 2026)
 

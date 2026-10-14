@@ -75,7 +75,7 @@ export default function Home() {
 
       {loadError && (
         <div className="err">
-          {loadError.replace(/\.+$/, '')}. Check that BLOB_READ_WRITE_TOKEN is set (see README).
+          {loadError.replace(/\.+$/, '')}. Check that a Public Blob store is connected to this project, then redeploy.
         </div>
       )}
 
