@@ -1,7 +1,7 @@
 const EL = 'https://api.elevenlabs.io/v1';
 
 function apiKey() {
-  const key = process.env.ELEVENLABS_API_KEY;
+  const key = process.env.ELEVENLABS_API_KEY?.trim();
   if (!key) throw new Error('ELEVENLABS_API_KEY is not set');
   return key;
 }

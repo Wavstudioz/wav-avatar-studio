@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 // Simple crew lock: HTTP basic auth against APP_PASSWORD (any username).
 export function middleware(req: NextRequest) {
-  const password = process.env.APP_PASSWORD;
+  const password = process.env.APP_PASSWORD?.trim();
   if (!password) return NextResponse.next();
 
   const header = req.headers.get('authorization');

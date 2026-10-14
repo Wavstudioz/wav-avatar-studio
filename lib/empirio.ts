@@ -4,7 +4,7 @@ export const SEEDANCE_MODEL = process.env.SEEDANCE_MODEL || 'seedance-2-5';
 const IMAGE_MODEL = process.env.IMAGE_MODEL || 'seedream-5-0-flash';
 
 function apiKey() {
-  const key = process.env.EMPIRIOLABS_API_KEY;
+  const key = process.env.EMPIRIOLABS_API_KEY?.trim();
   if (!key) throw new Error('EMPIRIOLABS_API_KEY is not set');
   return key;
 }
