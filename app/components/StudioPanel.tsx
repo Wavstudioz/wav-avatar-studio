@@ -54,6 +54,7 @@ export default function StudioPanel({
     }
   };
 
+  const [restyle, setRestyle] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -129,6 +130,7 @@ export default function StudioPanel({
         firstFrameUrl: mode === 'shot' ? frameUrl : undefined,
         engine: mode === 'talk' ? engine : 'seedance',
         audioSeconds: audioLen ?? undefined,
+        restyle: mode === 'talk' && engine === 'portrait' ? restyle && !!scene.trim() : undefined,
       });
       onQueued(job);
     });
@@ -136,7 +138,8 @@ export default function StudioPanel({
   const portrait = mode === 'talk' && engine === 'portrait';
   const effectiveRes: string = portrait ? (draft ? '540p' : resolution === '480p' ? '540p' : resolution) : draft ? '480p' : resolution;
   const billedSeconds = portrait ? Math.max(1, Math.round(audioLen ?? duration)) : duration;
-  const cost = billedSeconds * (portrait ? PORTRAIT_RATES[effectiveRes] : RATES[effectiveRes]);
+  const restyling = portrait && restyle && !!scene.trim();
+  const cost = billedSeconds * (portrait ? PORTRAIT_RATES[effectiveRes] : RATES[effectiveRes]) + (restyling ? 0.03 : 0);
   const audioTooShort = audioLen !== null && audioLen < 2;
   const audioTooLong = audioLen !== null && audioLen > 30;
 
@@ -291,7 +294,7 @@ export default function StudioPanel({
           </>
         )}
 
-        <h3>{portrait ? 'Delivery direction (optional)' : 'Scene'}</h3>
+        <h3>{portrait ? (restyle ? 'Scene (where you are, light, wardrobe, framing)' : 'Delivery direction (optional)') : 'Scene'}</h3>
         <textarea
           value={scene}
           onChange={(e) => setScene(e.target.value)}
@@ -325,6 +328,30 @@ export default function StudioPanel({
                 : 'Full scenes, camera moves and staging. Generated characters only — Seedance blocks real faces.'}
             </p>
           </label>
+        )}
+
+        {portrait && (
+          <>
+            <label className="check">
+              <input type="checkbox" checked={restyle} onChange={(e) => setRestyle(e.target.checked)} />
+              <span>
+                <b style={{ color: 'var(--text)' }}>Put me in the scene</b> — first creates a new cinematic still of you from the
+                Scene text (background, lighting, wardrobe), then animates it. About $0.03 extra. Off = animate the raw photo.
+              </span>
+            </label>
+            {restyle && (
+              <label className="f">
+                <span>Aspect ratio</span>
+                <div className="seg">
+                  {ASPECTS.map((a) => (
+                    <button key={a} className={aspect === a ? 'on' : ''} onClick={() => setAspect(a)}>
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </label>
+            )}
+          </>
         )}
 
         {!portrait && (

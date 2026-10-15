@@ -1,9 +1,9 @@
-import { submitVideo, SEEDANCE_MODEL } from '@/lib/empirio';
-import { readJson, saveJson } from '@/lib/store';
+import { generateImage, submitVideo, SEEDANCE_MODEL } from '@/lib/empirio';
+import { copyRemote, readJson, saveJson } from '@/lib/store';
 import { route, need } from '@/lib/http';
 import { PORTRAIT_MODEL, PORTRAIT_RATES, RATES, type Avatar, type Engine, type Job, type JobKind } from '@/lib/types';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 interface GenerateBody {
   kind: JobKind;
@@ -24,6 +24,8 @@ interface GenerateBody {
   engine?: Engine;
   /** seconds of dialogue audio, for the portrait cost estimate */
   audioSeconds?: number;
+  /** portrait only: generate a new still of the person in `scene` before animating */
+  restyle?: boolean;
   // extend + final
   parentId?: string;
 }
@@ -108,11 +110,31 @@ export const POST = route(async (req: Request) => {
       await Promise.all((body.avatarIds ?? []).map((id) => readJson<Avatar>(`avatars/${id}.json`)))
     ).filter((a): a is Avatar => !!a);
     const speaker = need(avatars.find((a) => a.id === body.speakerId) ?? avatars[0], 'Pick who is talking');
-    const image = speaker.imageUrls[0];
+    let image = speaker.imageUrls[0];
     const audioUrl = need(body.audioUrl, 'Voice the dialogue (or upload a line) first');
     const resolution = body.draft ? '540p' : (body.resolution ?? '720p');
     const duration = Math.max(1, Math.round(body.audioSeconds ?? body.duration ?? 6));
-    const prompt = [body.scene?.trim(), 'Natural head movement and facial expression, precise lip sync.']
+    const scene = body.scene?.trim();
+
+    // Optional: place the person in the described scene first (new background, lighting,
+    // framing), then animate that still — closer to a full generation than the raw photo.
+    let stillCost = 0;
+    if (body.restyle && scene) {
+      const still = await generateImage(
+        `The same person as in the reference photo — identical face, hair, skin tone and identity. ${scene}. ` +
+          'Photorealistic cinematic still, shallow depth of field, motivated lighting, facing the camera at eye level, ' +
+          'mouth relaxed and closed, sharp focus on the face. No text, no captions, no logos.',
+        [image],
+        body.aspect ?? '9:16',
+      );
+      image = await copyRemote(still, 'stills/scene-still.png');
+      stillCost = 0.03;
+    }
+
+    const prompt = [
+      body.restyle ? undefined : scene,
+      'Natural head movement, blinking and facial expression, precise lip sync.',
+    ]
       .filter(Boolean)
       .join(' ');
 
@@ -125,8 +147,8 @@ export const POST = route(async (req: Request) => {
       prompt,
       dialogue: body.dialogue,
       audioUrl,
-      params: { engine: 'portrait', image, resolution, duration, draft: !!body.draft },
-      estimatedCost: duration * PORTRAIT_RATES[resolution],
+      params: { engine: 'portrait', image, resolution, duration, draft: !!body.draft, restyled: !!(body.restyle && scene) },
+      estimatedCost: duration * PORTRAIT_RATES[resolution] + stillCost,
       createdAt: now,
     };
   } else {
